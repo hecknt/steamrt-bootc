@@ -1,4 +1,4 @@
-FROM docker.io/library/debian:unstable
+FROM registry.gitlab.steamos.cloud/steamrt/steamrt4/sdk
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -11,19 +11,30 @@ RUN --mount=type=tmpfs,dst=/tmp --mount=type=tmpfs,dst=/root --mount=type=tmpfs,
 # RUN apt update -y && apt install -y whois
 # RUN usermod -p "$(echo "changeme" | mkpasswd -s)" root
 
+RUN ln -sf bash /usr/bin/sh
+RUN ls -l /bin/sh
+RUN ls -l /usr/bin/sh
+
 ENV CARGO_HOME=/tmp/rust
 ENV RUSTUP_HOME=/tmp/rust
 RUN --mount=type=tmpfs,dst=/tmp --mount=type=tmpfs,dst=/root --mount=type=tmpfs,dst=/boot \
     apt update -y && \
-    apt install -y git curl make build-essential go-md2man libzstd-dev pkgconf dracut libostree-dev ostree && \
+    apt install -y git curl make build-essential go-md2man libzstd-dev pkgconf dracut && \
+    apt install -y libcurl4-openssl-dev libzstd-dev libssl-dev pkg-config curl git build-essential meson \
+        libfuse3-dev liblzma-dev libarchive-dev libsoup2.4-dev e2fslibs-dev libext2fs-dev libgpgme-dev go-md2man \
+        autoconf automake libtool libseccomp-dev libcap-dev libglib2.0-dev bison flex equivs gobject-introspection && \
     curl --proto '=https' --tlsv1.2 -sSf "https://sh.rustup.rs" | sh -s -- --profile minimal -y && \
+    git clone https://github.com/ostreedev/ostree.git --depth 1 /tmp/ostree && \
+    bash -c 'pushd /tmp/ostree && git submodule update --init && env NOCONFIGURE=1 ./autogen.sh && ./configure --prefix=/usr --libdir=/usr/lib --sysconfdir=/etc --with-curl --with-dracut && make -j"$(nproc)" && make install && popd && ln -svf /usr/lib/ostree* /lib/$(arch)-linux-gnu/ || true && ldconfig' && \
     git clone "https://github.com/bootc-dev/bootc.git" /tmp/bootc && \
-    sh -c ". ${RUSTUP_HOME}/env ; make -C /tmp/bootc bin install-all" && \
-    printf "systemdsystemconfdir=/etc/systemd/system\nsystemdsystemunitdir=/usr/lib/systemd/system\n" | tee "/usr/lib/dracut/dracut.conf.d/30-bootcrew-fix-bootc-module.conf" && \
+    sh -c ". ${RUSTUP_HOME}/env ; make -C /tmp/bootc bin install-all"
+
+RUN printf "systemdsystemconfdir=/etc/systemd/system\nsystemdsystemunitdir=/usr/lib/systemd/system\n" | tee "/usr/lib/dracut/dracut.conf.d/30-bootcrew-fix-bootc-module.conf" && \
     printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" bootc "' | tee "/usr/lib/dracut/dracut.conf.d/30-bootcrew-bootc-container-build.conf" && \
-    dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | tail -n 1)/initramfs.img" && \
-    apt purge -y git curl make build-essential go-md2man libzstd-dev pkgconf libostree-dev && \
-    apt autoremove -y && \
+    KVER=$(ls /usr/lib/modules | tail -n1) && \
+    dracut --force "/usr/lib/modules/$KVER/initramfs.img" "$KVER"
+
+RUN apt autoremove -y && \
     apt clean -y
 
 # Necessary for general behavior expected by image-based systems
