@@ -1,6 +1,8 @@
-# SteamRT Bootc
+# Steam Runtime Bootc
 
 A container image built off of the Steam Runtime (yes, the steam runtime, not SteamOS) that is made to be bootable with bootc.
+
+<img width="2558" height="1367" alt="image" src="https://github.com/user-attachments/assets/ff1a0e68-a580-43c5-b404-5a1e10d04983" />
 
 ## Building
 
